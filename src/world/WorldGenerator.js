@@ -48,7 +48,29 @@ export function generateWorld(renderer, { landFraction, seed, maxAnisotropy }) {
   }
   let acc = 0, bin = 0;
   for (; bin < 256; bin++) { acc += hist[bin]; if (acc >= total * (1 - landFraction)) break; }
-  material.uniforms.sea.value = ((bin + 0.5) / 255) * 1.6 - 0.8;
+  const seaValue = ((bin + 0.5) / 255) * 1.6 - 0.8;
+  material.uniforms.sea.value = seaValue;
+
+  // Low-res land/sea mask (128x64) used to plant settlements on land.
+  const MASK_W = 128, MASK_H = 64;
+  const land = new Uint8Array(MASK_W * MASK_H);
+  for (let cj = 0; cj < MASK_H; cj++) {
+    for (let ci = 0; ci < MASK_W; ci++) {
+      let isLand = 0;
+      for (let dj = 0; dj < 4 && !isLand; dj++) {
+        const j = cj * 4 + dj;
+        if (j >= SH) break;
+        for (let di = 0; di < 4 && !isLand; di++) {
+          const i = ci * 4 + di;
+          if (i >= SW) break;
+          const v = buf[(j * SW + i) * 4];
+          const h = (v / 255) * 1.6 - 0.8;
+          if (h >= seaValue) isLand = 1;
+        }
+      }
+      land[cj * MASK_W + ci] = isLand;
+    }
+  }
   lo.dispose();
 
   // Full-quality passes.
@@ -60,5 +82,5 @@ export function generateWorld(renderer, { landFraction, seed, maxAnisotropy }) {
   const specular = run(3, 2048, 1024, true);
   const clouds = run(4, 2048, 1024, true);
   material.dispose();
-  return { color: color.texture, normal: normal.texture, specular: specular.texture, clouds: clouds.texture };
+  return { color: color.texture, normal: normal.texture, specular: specular.texture, clouds: clouds.texture, land };
 }
